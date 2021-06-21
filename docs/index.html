@@ -1,5 +1,6 @@
 <html lang="en">
 <head>
+    <title>Tic Tac Toe</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
 
@@ -11,7 +12,12 @@
             height: 100vh;
             margin: 0;
             font-size: 16px;
+            background: var(--bg-color);
+            color: var(--fill-color);
             --animation-speed: .3s;
+            --bg-color: #b2fef7;
+            --cell-bg: #80cbc4;
+            --fill-color: #ba6b6c;
         }
 
         h1 {
@@ -26,6 +32,14 @@
             }
         }
 
+        @media (prefers-color-scheme: dark) {
+            body {
+                --bg-color: #212121;
+                --cell-bg: #484848;
+                --fill-color: #4f9a94;
+            }
+        }
+
         .TicTacToe__Container {
             position: relative;
             margin: 0 auto;
@@ -35,7 +49,6 @@
             grid-template-columns: repeat(3, minmax(20px, 1fr));
             grid-template-rows: repeat(3, minmax(20px, 1fr));
             grid-gap: 0.5rem;
-            background: antiquewhite;
             aspect-ratio: 1;
             max-width: 100%;
             max-height: min(100%, 100vw);
@@ -44,9 +57,9 @@
         }
 
         .TicTacToe_Cell {
-            padding: 3rem;
+            padding: clamp(.1rem, 4vw, 2rem);
             position: relative;
-            background: green;
+            background: var(--cell-bg);
             aspect-ratio: 1;
             transition-property: filter, box-shadow, margin-top, margin-left;
             transition-duration: var(--animation-speed);
@@ -60,15 +73,10 @@
         .TicTacToe_Cell:hover,
         .TicTacToe__Container:not(:hover) .TicTacToe_Cell:focus {
             filter: brightness(110%);
-            box-shadow: .3rem .3rem .8rem;
+            box-shadow: .5rem .5rem 1.8rem;
             margin-top: -.15rem;
             margin-left: -.15rem;
-        }
-
-        @keyframes rotate {
-            100% {
-                transform: rotate(1turn);
-            }
+            z-index: 1;
         }
 
         .TicTacToe_Cell.winning-cell {
@@ -89,7 +97,7 @@
             background-size: 50% 50%, 50% 50%;
             background-position: 0 0, 100% 0, 100% 100%, 0 100%;
             background-image: linear-gradient(#399953, #399953), linear-gradient(#fbb300, #fbb300), linear-gradient(#d53e33, #d53e33), linear-gradient(#377af5, #377af5);
-            animation: rotate 4s linear infinite;
+            animation: rotate calc(var(--animation-speed) * 9) linear infinite;
         }
 
         .TicTacToe_Cell.winning-cell::after {
@@ -104,29 +112,33 @@
             border-radius: 5px;
         }
 
+        @keyframes rotate {
+            100% {
+                transform: rotate(1turn);
+            }
+        }
+
 
         #path2 {
-            stroke-dasharray: 430;
+            stroke: var(--fill-color);
+            stroke-dasharray: 400;
             stroke-dashoffset: 800;
             animation: letter-x var(--animation-speed) linear;
-            animation-fill-mode: forwards;
         }
 
         #path3 {
-            stroke-dasharray: 430;
-            stroke-dashoffset: 800;
-
+            stroke: var(--fill-color);
+            stroke-dasharray: 400;
+            stroke-dashoffset: 0;
             animation: letter-x var(--animation-speed) linear;
-            animation-fill-mode: forwards;
             animation-delay: var(--animation-speed);
         }
 
         #circle-path {
+            stroke: var(--fill-color);
             stroke-dasharray: 360;
             stroke-dashoffset: 0;
-
             animation: letter-o var(--animation-speed) linear;
-            /*animation-fill-mode: forwards;*/
         }
 
         @keyframes letter-o {
@@ -169,13 +181,13 @@
          enable-background='new 0 0 50 50' xml:space='preserve'
     >
         <line id='path2' fill='none' stroke='#000000' stroke-linecap="round"
-              stroke-width='3' stroke-miterlimit='10' x1='8.5'
-              y1='41.5' x2='41.5' y2='8.5'
+              stroke-width='3' stroke-miterlimit='10'
+              y1='50' x2='50' x1='0' y2='0'
         />
         <line id='path3' fill='none' stroke='#000000' stroke-linecap="round"
-              stroke-width='3' stroke-miterlimit='10' x1='41.5' y1='41.5'
-              x2='8.5'
-              y2='8.5'
+              stroke-width='3' stroke-miterlimit='10' x1='50' y1='50'
+              x2='0'
+              y2='0'
         />
     </svg>
 </template>
@@ -187,7 +199,6 @@
             stroke-mitterlimit="0" cx="50" cy="50" r="48"
             stroke-dasharray="360" stroke-linecap="round" transform="rotate(-90) translate(-100 0)"
     >
-<!--        <animate attributeName="stroke-dashoffset" values="360;0" dur="2s"></animate>-->
     </circle>
 </svg>
 </template>
@@ -204,7 +215,6 @@
     function resetGame() {
         $cellList.forEach((cell) => {
             cell.innerHTML = '';
-            console.log('cell', cell)
             cell.classList.remove('winning-cell');
         })
         board = [[], [], []];
@@ -229,8 +239,8 @@
         }
         board[col][row] = isXNext ? 'x' : 'o';
         const template = isXNext ? $xTemplate.content.cloneNode(true) : $oTemplate.content.cloneNode(true);
-        isXNext = !isXNext;
         $clicked.appendChild(template);
+        isXNext = !isXNext;
 
         const winnerResults = checkBoard(board);
         if (winnerResults) {
@@ -245,10 +255,16 @@
     })
 
     function checkLane(a, b, c) {
+        if (!a || !b || !c) {
+            allFull = false;
+        }
         return !!(a && a === b && b === c)
     }
 
+    let allFull = false;
+
     function checkBoard(game) {
+        allFull = true;
         for (let i = 0; i < 3; i++) {
             if (checkLane(game[i][0], game[i][1], game[i][2])) {
                 return {
@@ -274,6 +290,10 @@
                 winner: game[1][1],
                 cells: [[0, 2], [1, 1], [2, 0]]
             };
+        }
+
+        if (allFull) {
+            gameEnded = true;
         }
         return undefined
     }
