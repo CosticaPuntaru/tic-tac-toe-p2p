@@ -57,7 +57,6 @@
         }
 
         .TicTacToe_Cell {
-            padding: clamp(.1rem, 4vw, 2rem);
             position: relative;
             background: var(--cell-bg);
             aspect-ratio: 1;
@@ -67,6 +66,14 @@
             box-shadow: 0 0 .3rem;
             outline: none;
             will-change: filter, box-shadow, margin-top, margin-left;
+        }
+
+        .TicTacToe_Cell svg {
+            position: absolute;
+            top: clamp(.1rem, 4vw, 2rem);
+            left: clamp(.1rem, 4vw, 2rem);
+            right: clamp(.1rem, 4vw, 2rem);
+            bottom: clamp(.1rem, 4vw, 2rem);
         }
 
         .TicTacToe_Cell.winning-cell,
@@ -159,10 +166,27 @@
             }
         }
 
+        .Hidden {
+            display: none;
+        }
+
+        .multiplayer {
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+
+        .multiplayer:hover {
+            filter: brightness(110%);
+        }
+
+        .connection__config {
+            display: flex;
+        }
     </style>
 </head>
 <body>
-<h1>Tic Tac Toe</h1>
+<h1>Tic Tac Toe <span class="multiplayer" role="button" tabindex="0">Multiplayer</span></h1>
 <!--<div class="TicTacToe">-->
 <div class="TicTacToe__Container">
     <div class="TicTacToe_Cell" tabindex="1" role="button"></div>
@@ -176,6 +200,36 @@
     <div class="TicTacToe_Cell" tabindex="9" role="button"></div>
 </div>
 
+<div class="connection Hidden">
+    <div class="connection__config">
+        <div>
+            <button id="createBtn">Create</button>
+            <h3 id="myModalLabel">click create, then copy the next input value and send it to your friend</h3>
+            <input id="localOffer" rows=10 cols=50>
+            <h3>He must give you a answer, paste the "answer" you received</h3>
+            <input id="remoteAnswer" rows=10 cols=50>
+            <br>
+            <br>
+            <button id="answerRecdBtn">Okay, I pasted it.</button>
+        </div>
+        <div>
+            <h3>join a room?</h3>
+            <h3>Paste the "offer" you received</h3>
+            <input id="remoteOffer" rows=10 cols=50>
+            <button id="offerRecdBtn">Okay, I pasted it.</button>
+            <br>
+            <h3>Then, send the answer to your friend</h3>
+            <input id="localAnswer" rows=10 cols=50>
+        </div>
+    </div>
+    <hr>
+    Chat:
+    <br>
+    <div id="chatlog" style="height:200px; overflow:auto; border:1px solid"></div>
+    <br>
+    <input type="text" id="messageTextBox" placeholder="Type your message here">
+    <button id="sendMessageBtn" onclick="sendMessage()">Send message</button>
+</div>
 <template id="x-letter-template">
     <svg version='1.1' xmlns='http://www.w3.org/2000/svg' x='0px' y='0px' viewBox='0 0 50 50'
          enable-background='new 0 0 50 50' xml:space='preserve'
@@ -205,25 +259,23 @@
 
 <script>
     const $container = document.querySelector('.TicTacToe__Container');
+    const $connection = document.querySelector('.connection');
     const $xTemplate = document.getElementById('x-letter-template');
     const $oTemplate = document.getElementById('o-letter-template');
     const $cellList = $container.querySelectorAll('.TicTacToe_Cell');
     let isXNext = true;
     let board = [[], [], []];
     let gameEnded = false;
-
-    function resetGame() {
-        $cellList.forEach((cell) => {
-            cell.innerHTML = '';
-            cell.classList.remove('winning-cell');
-        })
-        board = [[], [], []];
-    }
-
+    let currentPlayer = true;
+    let singlePlayer = true;
     $container.addEventListener('click', (e) => {
         if (gameEnded) {
-            resetGame();
-            gameEnded = false;
+            if (singlePlayer || currentPlayer === isXNext) {
+                resetGame();
+                if (!singlePlayer) {
+                    sendJson({type: 'sys', message: 'reset'})
+                }
+            }
             return;
         }
         const $clicked = e.target;
@@ -234,12 +286,26 @@
         const index = parseInt(tabIndex) - 1;
         const row = index % 3;
         const col = Math.floor(index / 3);
+        if (!singlePlayer && currentPlayer !== isXNext) {
+            return;
+        }
+        executeMove({col, row});
+        if (!singlePlayer) {
+            sendJson({
+                type: 'move',
+                col,
+                row,
+            })
+        }
+    })
+
+    function executeMove({col, row}) {
         if (board[col][row]) {
             return;
         }
         board[col][row] = isXNext ? 'x' : 'o';
         const template = isXNext ? $xTemplate.content.cloneNode(true) : $oTemplate.content.cloneNode(true);
-        $clicked.appendChild(template);
+        $cellList[(col * 3) + row].appendChild(template);
         isXNext = !isXNext;
 
         const winnerResults = checkBoard(board);
@@ -252,7 +318,7 @@
             })
             // alert(`The winner is ${winner}, click any cell to reset`);
         }
-    })
+    }
 
     function checkLane(a, b, c) {
         if (!a || !b || !c) {
@@ -297,6 +363,167 @@
         }
         return undefined
     }
+
+
+    // de aici in jos e copiat cu nesimtenie si adaugat ce trebuia pt joc
+    // credits to: https://github.com/xem/miniWebRTC
+    document.querySelector('.multiplayer')
+        .addEventListener('click', function () {
+            $connection.classList.toggle('Hidden')
+            $container.classList.toggle('Hidden')
+        })
+
+    function resetGame() {
+        gameEnded = false;
+        $cellList.forEach((cell) => {
+            cell.innerHTML = '';
+            cell.classList.remove('winning-cell');
+        })
+        board = [[], [], []];
+        $connection.classList.add('Hidden')
+        $container.classList.remove('Hidden')
+
+    }
+
+    localOffer.value = remoteAnswer.value = remoteOffer.value = localAnswer.value = "";
+
+    // BOB: create
+    createBtn.onclick = function () {
+        dc1 = pc1.createDataChannel('test', {reliable: true})
+        activedc = dc1
+        dc1.onopen = function (e) {
+        }
+        dc1.onmessage = function (e) {
+            var data = JSON.parse(e.data)
+            interpretMessage(data);
+
+        }
+        pc1.createOffer(function (desc) {
+            pc1.setLocalDescription(desc, function () {
+            }, function () {
+            })
+        }, function () {
+        }, sdpConstraints)
+    };
+
+    // BOB: pasted Alice's answer
+    answerRecdBtn.onclick = function () {
+        var answer = remoteAnswer.value;
+        var answerDesc = new RTCSessionDescription(JSON.parse(answer))
+        pc1.setRemoteDescription(answerDesc);
+    };
+
+    // ALICE: pasted Bob's answer
+    offerRecdBtn.onclick = function () {
+        var offer = remoteOffer.value;
+        var offerDesc = new RTCSessionDescription(JSON.parse(offer))
+        pc2.setRemoteDescription(offerDesc)
+        pc2.createAnswer(function (answerDesc) {
+                pc2.setLocalDescription(answerDesc)
+            },
+            function () {
+            },
+            sdpConstraints)
+    };
+
+    if (navigator.webkitGetUserMedia) {
+        RTCPeerConnection = webkitRTCPeerConnection
+    }
+
+    var cfg = {'iceServers': [{'url': "stun:stun.gmx.net"}]},
+        con = {'optional': [{'DtlsSrtpKeyAgreement': true}]}
+
+    var pc1 = new RTCPeerConnection(cfg, con), dc1 = null, tn1 = null, activedc, pc1icedone = false;
+
+    var sdpConstraints = {
+        optional: [],
+    }
+
+    function sendMessage() {
+        if (messageTextBox.value) {
+            sendJson({type: 'text', message: messageTextBox.value});
+            chatlog.innerHTML += '[' + new Date() + '] ' + messageTextBox.value + '</p>';
+            messageTextBox.value = "";
+        }
+        return false
+    }
+
+    function sendJson(json) {
+        activedc.send(JSON.stringify(json));
+    }
+
+    pc1.onicecandidate = function (e) {
+        if (e.candidate == null) {
+            localOffer.value = JSON.stringify(pc1.localDescription);
+        }
+    }
+
+    var pc2 = new RTCPeerConnection(cfg, con), dc2 = null, pc2icedone = false;
+
+    pc2.ondatachannel = function (e) {
+        var datachannel = e.channel || e;
+        dc2 = datachannel
+        activedc = dc2
+        dc2.onopen = function (e) {
+            sendJson({type: 'text', message: 'connected'});
+            writeLocalMessage('connected')
+            writeLocalMessage('You are the second player, playing O')
+            sendJson({type: 'sys', message: 'start'});
+            resetGame();
+            isXNext = true;
+            singlePlayer = false;
+            currentPlayer = false;
+        }
+        dc2.onmessage = function (e) {
+            console.log('on message', e);
+            var data = JSON.parse(e.data)
+            interpretMessage(data);
+        }
+    }
+
+    function interpretMessage(data) {
+        console.log('interpretMessage', data)
+        switch (data.type) {
+            case 'text':
+                writeLocalMessage(data.message)
+                break
+            case 'move':
+                executeMove(data);
+                break;
+            case 'sys':
+                if (data.message === 'reset') {
+                    resetGame()
+                }
+                if (data.message === 'start') {
+                    resetGame()
+                    isXNext = true;
+                    singlePlayer = false;
+                    currentPlayer = true;
+                    writeLocalMessage('You are the second player, playing X')
+                }
+                break;
+            default:
+                console.log('uknown message', data)
+        }
+    }
+
+
+    function writeLocalMessage(message) {
+        console.log('message', message)
+        if (message && message.trim()) {
+            chatlog.innerHTML += '[' + new Date() + '] ' + message + '</p>';
+            chatlog.scrollTop = chatlog.scrollHeight;
+        }
+
+    }
+
+
+    pc2.onicecandidate = function (e) {
+        if (e.candidate == null) {
+            localAnswer.value = JSON.stringify(pc2.localDescription);
+        }
+    }
 </script>
+
 </body>
 </html>
